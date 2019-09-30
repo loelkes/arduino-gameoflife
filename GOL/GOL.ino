@@ -23,7 +23,7 @@
 #define LED_PIN  51
 #define COLOR_ORDER GRB
 #define CHIPSET     SK6812
-#define BRIGHTNESS 64
+#define BRIGHTNESS 8
 #define GENERATION_LIMIT 1000
 
 // Helper functions for an two-dimensional XY matrix of pixels.
@@ -44,8 +44,8 @@
 
 
 // Params for width and height
-const uint8_t kMatrixWidth = 80;
-const uint8_t kMatrixHeight = 8;
+const uint8_t kMatrixWidth = 16;
+const uint8_t kMatrixHeight = 16;
 
 // Param for different pixel layouts
 const bool    kMatrixSerpentineLayout = true;
@@ -193,16 +193,16 @@ void setup() {
   Serial.println( " Hello World!" );
   FastLED.addLeds<CHIPSET, LED_PIN, COLOR_ORDER>( leds, NUM_LEDS ).setCorrection( TypicalSMD5050 );
   FastLED.setBrightness( BRIGHTNESS );
-
+  selfTest(); 
   // Output some information.
   Serial.print( millis() );
-  Serial.print( " Grid width )(" );
+  Serial.print( " Grid width (" );
   Serial.print( kMatrixWidth );
   Serial.print( ") and height (" );
   Serial.print( kMatrixHeight );
   Serial.println( ")." );
 
-}
+} // End of setup()
 
 
 ////////////////////////////
@@ -213,29 +213,29 @@ void setup() {
 boolean world[ kMatrixWidth ][ kMatrixHeight ];
 
 // Counts the number of elapsed generations
-int generation;
+int generation = 0;
 
-int count_neighbours( int y, int x ) {
+int count_neighbours( int x, int y ) {
   
   // count the number of neighbough live cells for a given cell
   int count = 0;
   
   // Check above
-  if( y > 0 ) { // We are not on the first row. There is a row above
-    if ( x > 0            ) count += world[ x -1 ][ y - 1 ];  // above left
-                            count += world[   x  ][ y - 1 ];  // above center
-    if ( x < kMatrixWidth ) count += world[ x +1 ][ y - 1 ];  // above right
+  if ( y > 0 ) { // We are not on the first row. There is a row above
+    if ( x > 0            )     count += world[ x - 1 ][ y - 1 ];  // above left
+                                count += world[   x   ][ y - 1 ];  // above center
+    if ( x < kMatrixWidth - 1 ) count += world[ x + 1 ][ y - 1 ];  // above right
   }
 
   // Check the same row
-  if ( x > 0            )   count += world[ x - 1 ][ y ];     // same left
-  if ( x < kMatrixWidth )   count += world[ x + 1 ][ y ];     // same right
+  if ( x > 0            )     count += world[ x - 1 ][ y ];     // same left
+  if ( x < kMatrixWidth - 1 ) count += world[ x + 1 ][ y ];     // same right
   
   // Check below
-  if ( y < kMatrixHeight ) { // We are not the last row. There is a row below
-    if ( x > 0            ) count += world[ x - 1 ][ y + 1 ]; // below left
-                            count += world[   x   ][ y + 1 ]; // below center
-    if ( x < kMatrixWidth ) count += world[ x + 1 ][ y + 1 ]; // below right
+  if ( y < kMatrixHeight - 1) { // We are not the last row. There is a row below
+    if ( x > 0            )     count += world[ x - 1 ][ y + 1 ]; // below left
+                                count += world[   x   ][ y + 1 ]; // below center
+    if ( x < kMatrixWidth - 1 ) count += world[ x + 1 ][ y + 1 ]; // below right
   }
   
   return count;
@@ -249,20 +249,25 @@ int newGeneration() {
   generation++;
 
   // Check the neighbours for each cell
-  for ( int y = 0; y < kMatrixWidth; y++ ) {      // Go from left to right
-    for ( int x = 0; x < kMatrixHeight; x++ ) {   // Go from top to bottom
+  for ( int y = 0; y < kMatrixHeight; y++ ) {
+    for ( int x = 0; x < kMatrixWidth; x++ ) {
       
-      int neighbours = count_neighbours( y, x );
-      if ( world[ y ][ x ] > 1 ) {                
+      int neighbours = count_neighbours( x, y );
+
+      if ( world[ x ][ y ] > 0 ) {                
         // Cell is alive. Lives it it has 2 or 3 living neighbours.
-        if ( ( neighbours == 2 ) || ( neighbours == 3 ) ) newWorld[ y ][ x ] = 1;
+        
+        if ( ( neighbours == 2 ) || ( neighbours == 3 ) ) newWorld[ x ][ y ] = 1;
         // Cell bas too many (> 3) or too few (< 2) neighbours and dies.
-        else newWorld[ y ][ x ] = 0;
+        else newWorld[ x ][ y ] = 0;
+        
       } else {                                    
         // Cell is dead. Needs 3 neighbours to spawn.
-        if ( neighbours == 3 ) newWorld[ y ][ x ] = 1;
+        
+        if ( neighbours == 3 ) newWorld[ x ][ y ] = 1;
         // Cell dies or remains dead.
-        // else newWorld[ y ][ x ] = 0;
+        else newWorld[ x ][ y ] = 0;
+        
       }
       
     }
@@ -270,24 +275,26 @@ int newGeneration() {
 
   // Apply world
   int generationChanges = 0;
-  for ( int y = 0; y < kMatrixWidth; y++ ) {    // Go from left to right
-    for ( int x = 0; x < kMatrixHeight; x++ ) { // Go from top to bottom
+  for ( int y = 0; y < kMatrixHeight; y++ ) {    
+    for ( int x = 0; x < kMatrixWidth; x++ ) {
       
-      if( world[ x ][ y ] == newWorld[ x ][ y ] ) generationChanges++;
-      else world[ x ][ y ] = newWorld[ x ][ y ];
+//      if( world[ x ][ y ] == newWorld[ x ][ y ] ) generationChanges++;
+//      else world[ x ][ y ] = newWorld[ x ][ y ];
+        world[ x ][ y ] = newWorld[ x ][ y ];
 
     }
   }
 
-}
+} // End of newGeneration()
 
 void showSerialWorld() {
 
   Serial.print( millis() );
-  Serial.println( " The world at generation " );
+  Serial.print( " The world at generation " );
   Serial.println( generation );
-  for ( int x = 0; x < kMatrixHeight; x++ ) {   // Go from top to bottom
-    for ( int y = 0; y < kMatrixWidth; y++ ) {  // Go from left to right
+  
+  for ( int y = 0; y < kMatrixHeight; y++ ) {   
+    for ( int x = 0; x < kMatrixWidth; x++ ) {  
       
       if ( world[ x ][ y ] > 0 ) Serial.print( "x" );
       else Serial.print( "." );
@@ -296,15 +303,15 @@ void showSerialWorld() {
     Serial.println();
   }
 
-}
+} // End of showSerialWorld()
 
 void showLEDWorld() {
 
   FastLED.clear();
   int aliveColor = 0xFFFFFF;
   int deadColor = 0x000000;
-  for ( int y = 0; y < kMatrixWidth; y++ ) {    // Go from left to right
-    for ( int x = 0; x < kMatrixHeight; x++ ) { // Go from top to bottom
+  for ( int x = 0; x < kMatrixWidth; x++ ) {    // Go from left to right
+    for ( int y = 0; y < kMatrixHeight; y++ ) { // Go from top to bottom
       
       if ( world[ x ][ y ] > 0 ) leds[ XYsafe( x, y ) ] = aliveColor;
       else leds[ XYsafe( x, y ) ] = deadColor;
@@ -313,7 +320,7 @@ void showLEDWorld() {
   }
   FastLED.show();
 
-}
+} // End of showLEDWorld()
 
 void showWorld( int target ){
 
@@ -322,56 +329,60 @@ void showWorld( int target ){
   if ( target == 1 ) showSerialWorld();
   if ( target == 2 ) showLEDWorld();
 
-}
+} // End of showWorld()
 
 void randomWorld() {
 
   Serial.print( millis() );
   Serial.println( " Generating a new random world." );
   generation = 0;
-  for ( int y = 0; y < kMatrixWidth; y++ ) {    // Go from left to right
-    for ( int x = 0; x < kMatrixHeight; x++ ) { // Go from top to bottom
+  for ( int y = 0; y < kMatrixHeight; y++ ) {    
+    for ( int x = 0; x < kMatrixWidth; x++ ) { 
       
       world[ x ][ y ] = random( 0, 2 );
       
     }
   }
 
-}
+} // End of randomWorld()
 
 void playGOL() {
   
   Serial.print( millis() );
-  Serial.println( "Starting a new game of life!" );
+  Serial.println( " Starting a new game of life!" );
   randomWorld();
   while ( generation < GENERATION_LIMIT ) {
-    if ( newGeneration() == 0 ) break; // Nothing changes, world is dead!
-    showWorld( 1 );
-    delay( 1000 );
+    // showWorld( 1 );
+    showWorld( 2 );
+    newGeneration();
+    delay( 100 );
   }
 
-}
+} // End of playGOL()
 
 void selfTest() {
 
   Serial.print( millis() );
   Serial.println( " Performing selftest" );
   FastLED.clear();
-  FastLED.setBrightness( 1 );
-  int colors[] = { 0xFF0000, 0x00FF00, 0x0000FF };
+  FastLED.setBrightness( 8 );
+  int colors[] = { CRGB::Red, CRGB::Green, CRGB::Blue };
   for ( int c = 0; c < 3; c++ ) {                 // Go through a set of colors
-    for ( int y = 0; y < kMatrixWidth; y++ ) {    // Go from left to right
-      for ( int x = 0; x < kMatrixHeight; x++ ) { // Go from top to bottom
+    for ( int x = 0; x < kMatrixWidth; x++ ) {    // Go from left to right
+      for ( int y = 0; y < kMatrixHeight; y++ ) { // Go from top to bottom
         
         leds[ XYsafe( x, y ) ]  = colors[ c ]; 
         
       }
     }
+    Serial.print( millis() );
+    Serial.print( " Testing color " );
+    Serial.println( colors[ c ], HEX );
     FastLED.show();
-    delay( 1000 );
+    delay( 2000 );
   }
   FastLED.clear();
   Serial.print( millis() );
   Serial.println( " Selftest complete!" );
 
-}
+} // End of selfTest()
