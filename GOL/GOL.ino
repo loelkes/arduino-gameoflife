@@ -26,8 +26,8 @@
 // G A M E   O F  L I F E //
 ////////////////////////////
 
-#define WORLD_WIDTH 16
-#define WORLD_HEIGHT 16
+#define WORLD_WIDTH   93
+#define WORLD_HEIGHT  8
 
 // Holds the current world. Note that ( 0, 0 ) is at the top left of the corner
 // and x represents the horizontal and y the vertical axis.
@@ -40,35 +40,36 @@ int genDiff = 0;              // Difference from current to previous generation 
 int prevGenDiff = 0;          // Difference from the previous generation to its ancestor (amount of cells alive).
 int identicalGenCounter = 0;  // Counter of identical generation (amout of cells alive).
 
-#define GENERATION_LIMIT 1000
-#define IDENTICAL_GENERATION_LIMIT 10
-#define GENERATION_DELAY 100
-#define CELL_AGING true
-#define SERIAL_MONITOR false
+#define GENERATION_LIMIT 1000           // Reset the world after ... generations
+#define IDENTICAL_GENERATION_LIMIT 10   // Reset the world after ... generations with the same amount of cells alive
+#define GENERATION_DELAY 500            // Sleep ... milliseconds between each generation.
+#define CELL_AGING true                 // Change the cell color based on their age.
+#define SERIAL_MONITOR false            // Show a previw of the LED matrix on the serial console.
 
-CRGB aliveColor = 0xFFFFFF;
-CRGB deadColor = 0x000000;
+CRGB aliveColor = 0xFFFFFF; // Color for alive sells if no cell aging is set.
+CRGB deadColor = 0x000000;  // Color for dead cells (black).
 
 //////////////////
 // LED Settings //
 //////////////////
 
-#define LED_PIN     51
-#define COLOR_ORDER GRB
+#define LED_PIN     51      // MOSI pin on Arduino Mega is 51
+#define COLOR_ORDER GRB     // Specific to the SK6812 chip.
 #define CHIPSET     SK6812
 
-#define SELFTEST_TIME       1000
-#define SELFTEST_BRIGHTNESS 8
-#define GAME_BRIGHTNESS     16
+#define SELFTEST_TIME       1000  // How long should one color be tested (milliseconds)
+#define SELFTEST_BRIGHTNESS 8     // Brightness for the selftest. Set this to a low value to prevent power issues.
+#define PERFORM_SELFTEST    true  // Should we perform a selftest of all LEDs at boot?
+#define GAME_BRIGHTNESS     128    // Normal game brightness.
 
-CRGB selfTestColors[] = { CRGB::Red, CRGB::Green, CRGB::Blue };
+CRGB selfTestColors[] = { CRGB::Red, CRGB::Green, CRGB::Blue }; // Colors to be tested.
 
 #define NUM_LEDS ( WORLD_WIDTH * WORLD_HEIGHT )
 CRGB leds_plus_safety_pixel[ NUM_LEDS + 1 ];
 CRGB* const leds( leds_plus_safety_pixel + 1 );
 
 // Param for different pixel layouts
-const bool kMatrixSerpentineLayout = true;
+const bool kMatrixSerpentineLayout = false; // See documentation at the end of the code.
 
 //////////////////////////
 
@@ -83,10 +84,12 @@ void setup() {
   Serial.println( " Hello World!" );
   FastLED.addLeds<CHIPSET, LED_PIN, COLOR_ORDER>( leds, NUM_LEDS ).setCorrection( TypicalSMD5050 );
   FastLED.setBrightness( GAME_BRIGHTNESS );
-  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode( LED_BUILTIN, OUTPUT );
 
-  selfTest();
-  // Output some information.
+  #if PERFORM_SELFTEST
+    selfTest();
+  #endif
+
   Serial.print( millis() );
   Serial.print( " Grid width (" );
   Serial.print( WORLD_WIDTH );
@@ -101,7 +104,6 @@ void setup() {
 
 int count_neighbours( int x, int y ) {
 
-  // count the number of neighbough live cells for a given cell
   int count = 0;
   boolean wrapX = true;
   boolean wrapY = true;
@@ -110,34 +112,34 @@ int count_neighbours( int x, int y ) {
   int x_r = x + 1;
   int y_t = y - 1;
   int y_b = y + 1;
-  
-  
+
+
   if ( wrapX ) {
     if      ( x == 0 )                 x_l = WORLD_WIDTH - 1;
     else if ( x >= WORLD_WIDTH - 1 )   x_r = 0;
   }
   if ( wrapY ) {
     if      ( y == 0 )                 y_t = WORLD_HEIGHT - 1;
-    else if ( y >= WORLD_HEIGHT - 1 )  y_b = 0;  
+    else if ( y >= WORLD_HEIGHT - 1 )  y_b = 0;
   }
 
   count += world[ x_l ][ y_t ] > 0; // above left
-  count += world[  x  ][ y_t ] > 0; // above 
+  count += world[  x  ][ y_t ] > 0; // above
   count += world[ x_r ][ y_t ] > 0; // above right
 
   count += world[ x_l ][  y  ] > 0; // left
   count += world[ x_r ][  y  ] > 0; // right
-  
+
   count += world[ x_l ][ y_b ] > 0; // bottom left
-  count += world[  x  ][ y_b ] > 0; // bottom 
+  count += world[  x  ][ y_b ] > 0; // bottom
   count += world[ x_r ][ y_b ] > 0; // bottom right
 
   return count;
 
-}
+} // End of count_neighbours()
 
 int newGeneration() {
-  
+
   // Computes a new generation for a given world.
   // The int of each cell reprents the number of generations the cell is alive.
   // Use this number to change the cell (e.g. color) depending on it's age.
@@ -149,14 +151,13 @@ int newGeneration() {
   generation++;
 
   // Toogle LED with each generation.
-  digitalWrite(LED_BUILTIN, generation % 2); 
+  digitalWrite(LED_BUILTIN, generation % 2);
 
-  // Check the neighbours for each cell
+  // Check the neighbours for each cell.
+  // THE GAME MAGIC HAPPENS HERE!
   for ( int y = 0; y < WORLD_HEIGHT; y++ ) {   // Top to bottom
     for ( int x = 0; x < WORLD_WIDTH; x++ ) {  // Left to right
-
       int neighbours = count_neighbours( x, y );
-
       if ( world[ x ][ y ] > 0 ) { // Cell is alive. Lives it it has 2 or 3 living neighbours.
         if ( ( neighbours == 2 ) || ( neighbours == 3 ) ) newWorld[ x ][ y ] = world[ x ][ y ] + 1;
         else newWorld[ x ][ y ] = 0; // Cell bas too many (> 3) or too few (< 2) neighbours and dies.
@@ -178,24 +179,23 @@ int newGeneration() {
       cellsAlive += world[ x ][ y ] > 0;
     }
   }
-  checkReset();
+  checkReset(); // Check if reset conditions are met.
 } // End of newGeneration()
 
 void checkReset() {
   // Chekc the world for reset condition. If they are met, set triggerReset to true
   // and return nothing.
-    
+
    // Check if the world is not changing any more.
   if ( genDiff == prevGenDiff ) identicalGenCounter++;
   else identicalGenCounter = 0;
- 
   if ( identicalGenCounter > IDENTICAL_GENERATION_LIMIT ) {
     triggerReset = true;
     Serial.print( millis() );
     Serial.print( " World did not change since " );
     Serial.print( identicalGenCounter );
     Serial.println( " generations. Resetting world!" );
-    return;    
+    return;
   }
 
   // Check if the world is empty
@@ -205,7 +205,7 @@ void checkReset() {
     Serial.println( " No more cells alive. Resetting world!" );
     return;
   }
-  
+
 
   // Check if the generation limit ist met (hard reset).
   if ( generation > GENERATION_LIMIT ) {
@@ -229,16 +229,16 @@ void showSerialWorld() {
 } // End of showSerialWorld()
 
 void showLEDWorld() {
-  
+
   FastLED.clear();
-  for ( int x = 0; x < WORLD_WIDTH; x++ ) {    // Go from left to right
-    for ( int y = 0; y < WORLD_HEIGHT; y++ ) { // Go from top to bottom
-      #if CELL_AGING // Do not change color based on age.
-        if ( world[ x ][ y ] > 0 ) leds[ XYsafe( x, y ) ].setHue( min( world[ x ][ y ], 255 ) ); 
+  for ( int x = 0; x < WORLD_WIDTH; x++ ) {
+    for ( int y = 0; y < WORLD_HEIGHT; y++ ) {
+      #if CELL_AGING // Change color based on age.
+        if ( world[ x ][ y ] > 0 ) leds[ XYsafe( x, y ) ].setHue( min( world[ x ][ y ], 255 ) );
         else leds[ XYsafe( x, y ) ] = deadColor;
-      #else
+      #else // Static color for living cells.
         if ( world[ x ][ y ] > 0 ) leds[ XYsafe( x, y ) ] = aliveColor;
-        else leds[ XYsafe( x, y ) ] = deadColor; 
+        else leds[ XYsafe( x, y ) ] = deadColor;
       #endif
     }
   }
@@ -246,7 +246,7 @@ void showLEDWorld() {
 
 } // End of showLEDWorld()
 
-void showWorld( int target ){
+void showWorld(){
 
   Serial.print( millis() );
   Serial.print( " World generation: " );
@@ -257,7 +257,7 @@ void showWorld( int target ){
   #if SERIAL_MONITOR
     showSerialWorld();
   #endif
-  
+
   showLEDWorld();
 
 } // End of showWorld()
@@ -277,20 +277,24 @@ void randomWorld() {
 } // End of randomWorld()
 
 void resetWorld() {
+
   generation = 0;
   cellsAlive = 0;
+  genDiff = 0;
+  prevGenDiff = 0;
+  identicalGenCounter = 0;
   randomWorld();
+
 }
 
 void playGOL() {
 
   Serial.print( millis() );
-  Serial.println( " Starting a new game of life!" );
+  Serial.println( " Starting a new Game of life!" );
   resetWorld();
-  while ( !triggerReset ) {
-    // showWorld( 1 );
-    showWorld( 2 );
-    newGeneration();
+  while ( !triggerReset ) {   // Game loop.
+    showWorld();              // Show current world on the LEDs
+    newGeneration();          // Compute new world.
     delay( GENERATION_DELAY );
   }
   triggerReset = false;
